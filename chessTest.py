@@ -31,7 +31,16 @@ from PySide6.QtUiTools import QUiLoader
 from re import fullmatch
 
 class InputCoordinatesDialog(QDialog):
-    def __init__(self, num_figures, parent=None):
+    """
+    Диалоговое окно для ручного ввода координат фигур на шахматной доске.
+    """
+    def __init__(self, num_figures: int, parent: Optional[QDialog] = None):
+        """
+        Конструктор диалога координат.
+
+        :param num_figures (int): Количество фигур для размещения
+        :param parent (Optional[QDialog]): Родительское окно
+        """
         super().__init__(parent)
         self.Parent = parent
         self.num_figures = num_figures
@@ -43,10 +52,20 @@ class InputCoordinatesDialog(QDialog):
         self.setWindowTitle("Шахматы :: Ввод координат")
     @staticmethod
     def is_valid_format(s: str) -> bool:
+        """
+        Проверяет, соответствует ли строка формату "X Y" (два целых числа через пробел).
+        
+        :param s: строка для проверки
+
+        :return: True, если формат корректный
+        """
         return bool(fullmatch(r"\d+\s\d+", s.strip()))
     def load_ui(self):
+        """
+        Загружает интерфейс из .ui-файла и подключает кнопки.
+        """
         loader = QUiLoader()
-        file = QFile("input_coordinates.ui")
+        file = QFile(r"ui/input_coordinates.ui")
         if not file.open(QFile.ReadOnly):
             QMessageBox.critical(None, "Ошибка", "Не удалось открыть файл UI!")
             return
@@ -66,7 +85,14 @@ class InputCoordinatesDialog(QDialog):
         for input in self.coordinate_inputs:
             input.textChanged.connect(self.color)
         self.setLayout(self.mainLayout)
-    def __check_safe_position(self, pieces):
+    def __check_safe_position(self, pieces) -> bool:
+        """
+        Проверяет, не угрожают ли фигуры друг другу.
+
+        :param pieces: Итерация по парам (QLineEdit, QComboBox)
+
+        :return: True, если позиции безопасны
+        """
         tempBoard = ChessBoard(self.Parent.boardSizeSpinBox.value())
         for line_edit, combo in pieces:
             x, y = map(int,line_edit.text().strip().split())
@@ -76,10 +102,10 @@ class InputCoordinatesDialog(QDialog):
                 return False
         return True
 
-    def accept(self):
+    def accept(self) -> None:
         """
-        Возвращает список кортежей вида: (тип фигуры, (x, y))
-        Например: [("Конь", (2, 3)), ("Визирь", (1, 4))]
+        Проверяет валидность позиций и сохраняет их.
+        Если все позиции безопасны — принимает диалог и сохраняет данные в self.resFig.
         """
         if self.__check_safe_position(zip(self.coordinate_inputs, self.figure_selectors)):
             
@@ -89,7 +115,10 @@ class InputCoordinatesDialog(QDialog):
             super().accept()
         else:
             QMessageBox.warning(self, "Ошибка", "Фигуры находтся под боем")
-    def create_input_fields(self):
+    def create_input_fields(self) -> None:
+        """
+        Создаёт поля ввода координат и выпадающие списки для выбора типа фигуры.
+        """
         for i in range(self.num_figures):
             label = QLabel(f"Фигура {i+1}:")
             line_edit = QLineEdit()
@@ -122,19 +151,32 @@ class InputCoordinatesDialog(QDialog):
     
 
 class ModalTable(QDialog):
-    def __init__(self, table,solution, Parent=None):
+    """
+    Диалоговое окно, отображающее одно из решений размещения фигур на шахматной доске.
+    """
+    def __init__(self, table: "ChessBoard", solution: List[Tuple[int, int, str]], Parent=None):
+        """
+        Инициализация диалога, загрузка интерфейса и визуализация переданного решения.
+
+        :param table: Объект доски (ChessBoard)
+        :param solution: Список кортежей с координатами и типами фигур
+        :param Parent: Родительское окно (обычно MainWindow)
+        """
         super().__init__(Parent)
         self.table = table
         self.solution = solution  # список кортежей: (x, y, 'k' или 'v')
         self.Parent = Parent
         self.load_ui()
-        self.setWindowTitle("Одно из решений")
+        self.setWindowTitle("Шахматы :: Одно из решений")
         self.vizualize_solution()
 
 
     def load_ui(self):
+        """
+        Загружает интерфейс из файла .ui и находит нужные элементы.
+        """
         loader = QUiLoader()
-        file = QFile("board_window.ui")
+        file = QFile(r"ui/board_window.ui")
         if not file.open(QFile.ReadOnly):
             QMessageBox.critical(self, "Ошибка", "Не удалось открыть файл UI!")
             return
@@ -145,7 +187,7 @@ class ModalTable(QDialog):
         self.mainLayout = self.ui.findChild(QVBoxLayout, "verticalLayout")
         # Виджет для доски
         self.boardWidget = self.ui.findChild(QWidget, "boardWidget")
-        # self.mainLayout.addWidget(self.boardWidget)
+
         # Layout для кнопок
         self.button_layout = self.ui.findChild(QHBoxLayout, "buttonLayout")
 
@@ -160,6 +202,9 @@ class ModalTable(QDialog):
         self.setLayout(self.mainLayout)
 
     def vizualize_solution(self):
+        """
+        Визуализирует текущее решение на графической сцене с использованием QGraphicsView.
+        """
         size = len(self.table.grid)
         scene = QGraphicsScene()
         view = QGraphicsView()
@@ -175,31 +220,38 @@ class ModalTable(QDialog):
             if self.table.grid[y][x].is_empty():
                 piece = Knight(x,y) if type == "k" else Vizir(x,y)
                 self.table.add_piece(piece)
+        # Визуализация всех ячеек доски
         for x in range(size):
             for y in range(size):
-                if self.table.grid[y][x].threatened:
-                    cell = Cell(x,y,3)
+                if not self.table.grid[y][x].is_empty() and self.table.grid[y][x].piece._initiatedByUser:
+                    cell = Cell(x,y,2) # Пользовательская фигура
+                elif self.table.grid[y][x].threatened:
+                    cell = Cell(x,y,3) # Под угрозой
                 elif self.table.grid[y][x].is_empty():
-                    cell = Cell(x,y,0)
+                    cell = Cell(x,y,0) # Пустая клетка
                 else:
-                    cell = Cell(x,y,1)
+                    cell = Cell(x,y,1) # Размещенная программой фигура
                 scene.addItem(cell)
 
         view.setFixedSize(view.sizeHint())
     def save_to_file(self):
+        """
+        Сохраняет решения в файл через отдельный поток SaveThread.
+        """
         try:
-            # save_thread = QThread()
-            # save_thread.run = lambda: self.solver.write_output("output.txt", self.Parent.solver.solutions)
-            # save_thread.start()
-
             self.save_thread = SaveThread(self.Parent.solver, self.Parent.solver.solutions, "output.txt")
             self.save_thread.finished.connect(self.on_save_finished)
             self.save_thread.start()
-            # self.Parent.solver.write_output("output.txt", self.Parent.solver.solutions)
-            # QMessageBox.information(self, "Успех", "Решение сохранено в output.txt.")
+            
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить файл: {e}")
-    def on_save_finished(self, filename):
+    # Slot
+    def on_save_finished(self, filename: str):
+        """
+        Обработчик завершения сохранения файла. Показывает сообщение пользователю.
+
+        :param filename: Имя файла, в который были сохранены данные
+        """
         print(len(self.Parent.solver.solutions))
         QMessageBox.information(
                 self, 
@@ -208,16 +260,36 @@ class ModalTable(QDialog):
             )
         
 class SaveThread(QThread):
-    # Сигнал с параметрами: имя файла, сообщение об ошибке
+    """
+    Поток для асинхронного сохранения решений в файл.
+
+    Сигналы:
+        finished (str, str): Сигнал, испускаемый после завершения работы.
+            Первый параметр — имя файла.
+            Второй параметр — сообщение об ошибке (пустая строка, если ошибок не было).
+    """
+
     finished = Signal(str, str)
     
-    def __init__(self, solver, solutions, filename):
+    def __init__(self, solver, solutions: Set[frozenset], filename: str):
+        """
+        Инициализирует поток сохранения.
+
+        :param solver: Объект Solver, содержащий метод записи в файл.
+        :param solutions: Множество решений для сохранения.
+        :param filename: Имя файла, в который нужно сохранить данные.
+        """
         super().__init__()
         self.solver = solver
         self.solutions = solutions
         self.filename = filename
     
     def run(self):
+        """
+        Выполняет сохранение решений в файл.
+        При успешном завершении отправляет сигнал без ошибки.
+        В случае исключения — сигнал с сообщением об ошибке.
+        """
         try:
             self.solver.write_output(self.filename, self.solutions)
             self.finished.emit(self.filename, "")
@@ -225,7 +297,14 @@ class SaveThread(QThread):
             self.finished.emit(self.filename, str(e))
 
 class Cell(QGraphicsRectItem):
-    CELL_SIZE = 32
+    """
+    Класс для отображения одной ячейки шахматного поля в QGraphicsScene.
+    
+    Наследуется от QGraphicsRectItem и отвечает за визуализацию ячейки на сцене.
+    Цвет зависит от значения, переданного при создании.
+    """
+    CELL_SIZE = 32 # Размер одной клетки в пикселях
+
     # Назначим цвет в зависимости от значения в матрице
     COLOR_MAP = {
             0: QColor("white"),
@@ -233,7 +312,14 @@ class Cell(QGraphicsRectItem):
             2: QColor("blue"),
             3: QColor("red")
         }
-    def __init__(self, x, y, value):
+    def __init__(self, x: int, y: int, value: int):
+        """
+        Инициализирует ячейку на заданных координатах и с заданным значением цвета.
+
+        :param x (int): Координата по горизонтали (в клетках).
+        :param y (int): Координата по вертикали (в клетках).
+        :param value (int): Значение клетки, определяющее цвет заливки (0–3).
+        """
         super().__init__(0, 0, self.CELL_SIZE, self.CELL_SIZE)
         self.setPos(x * self.CELL_SIZE, y * self.CELL_SIZE)
         self.setPen(QPen(QColor("black")))
@@ -243,11 +329,18 @@ class Cell(QGraphicsRectItem):
 
 
 class MainWindow(QMainWindow):
+    """
+    Главное окно приложения, управляющее взаимодействием пользователя с UI и логикой решения задачи.
+    """
     def __init__(self):
+        """
+        Инициализация главного окна: загрузка UI, настройка кнопок, установка начального состояния.
+        """
         super().__init__()
         self.load_ui()
         self.board_created = False
         self.coords = []
+
         # Инициализация кнопок
         self.createBoardButton.clicked.connect(self.create_board)
         self.drawBoardButton.clicked.connect(self.draw_board)
@@ -262,8 +355,11 @@ class MainWindow(QMainWindow):
     
     
     def load_ui(self):
+        """
+        Загружает интерфейс из .ui-файла и инициализирует элементы управления.
+        """
         loader = QUiLoader()
-        file = QFile("chess_ui.ui")
+        file = QFile(r"ui/chess_ui.ui")
         file.open(QFile.ReadOnly)
         self.ui = loader.load(file, self)
         file.close()
@@ -277,26 +373,33 @@ class MainWindow(QMainWindow):
         self.placedFiguresSpinBox = self.ui.findChild(QSpinBox, "placedFiguresSpinBox")
         # self.figureComboBox = self.ui.findChild(QComboBox, "figureComboBox")
         
+        # Установка центрального виджета
         layout = QVBoxLayout()
         layout.addWidget(self.ui)
         central_widget = QWidget()
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
-    def get_n_l_k_pieces(self):
+
+    def get_n_l_k_pieces(self) -> Tuple[int, int, int, List[Tuple[str, Tuple[int, int]]]]:
+        """
+        Возвращает значения с элементов управления: размер доски, число фигур для размещения,
+        количество уже размещенных фигур и их координаты.
+
+        :return: Кортеж из (n, l, k, координаты фигур)
+        """
         return self.boardSizeSpinBox.value(), self.requiredFiguresSpinBox.value(), self.placedFiguresSpinBox.value(), self.coords
     def create_board(self):
-        """Создает доску и активирует кнопку рисования"""
+        """
+        Создает доску и запрашивает координаты уже размещенных фигур,
+        если они есть. Делает кнопку рисования доступной.
+        """
         try:
-            n = self.boardSizeSpinBox.value()
-            l = self.requiredFiguresSpinBox.value()
             k = self.placedFiguresSpinBox.value()
 
             if k > 0:
                 coords_menu = InputCoordinatesDialog(k, self)
                 if coords_menu.exec() == QDialog.Accepted:
                     self.coords = coords_menu.get_coordinates()
-            else:
-                pass
             # Если доска успешно создана
             self.board_created = True
             self.drawBoardButton.setEnabled(True)
@@ -307,7 +410,9 @@ class MainWindow(QMainWindow):
             self.drawBoardButton.setEnabled(False)
     
     def draw_board(self):
-        """Отрисовывает доску"""
+        """
+        Отрисовывает доску и запускает поток для поиска решений, если доска уже создана.
+        """
         if self.board_created:
             board, combinations = self.solver.generateBoard(*self.get_n_l_k_pieces())
             
@@ -320,11 +425,22 @@ class MainWindow(QMainWindow):
             # QMessageBox.information(self, "Информация", "Доска отрисована")
         else:
             QMessageBox.warning(self, "Ошибка", "Сначала создайте доску")
+    # Slot
     def on_solver_finished(self, board, solutions):
+        """
+        Обрабатывает завершение потока решения и отображает найденное решение.
+
+        :param board: Объект доски.
+        :param solutions: Найденные решения в виде множества.
+        """
         if solutions:
             ModalTable(board, next(iter(solutions)), self).exec()
     def closeEvent(self, event):
-        # Останавливаем все потоки при закрытии
+        """
+        Перехватывает закрытие окна и завершает все работающие потоки корректно.
+
+        :param event: Событие закрытия окна.
+        """
         threads = [
             getattr(self, attr) for attr in dir(self) 
             if attr.endswith('_thread') and isinstance(getattr(self, attr), QThread)
@@ -345,23 +461,41 @@ class MainWindow(QMainWindow):
 
 
 class Piece(ABC):
-    
-    def __init__(self, x: int, y: int):
+    """
+    Базовый класс шахматной фигуры.
+
+    """
+    def __init__(self, x: int, y: int, initiated = False):
+        """
+        Инициализация фигуры на позиции (x, y).
+
+        :param x: Координата X на доске.
+        :param y: Координата Y на доске.
+        """
         self.x = x
         self.y = y
+        self._initiatedByUser = initiated
     
     @abstractmethod
     def get_moves(self) -> List[Tuple[int, int]]:
-        """Возвращает возможные ходы фигуры"""
+        """
+        Метод, который должен быть реализован в подклассах.
+        Возвращает множество клеток, находящихся под ударом фигуры.
+
+        :return: Список координат клеток, находящихся под угрозой.
+        """
         pass
     
     @property
     @abstractmethod
     def symbol(self) -> str:
-        """Символьное обозначение фигуры"""
+        """:return: Символьное обозначение фигуры"""
         pass
 
 class Knight(Piece):
+    """
+    Класс шахматной фигуры — Конь.
+    """
     moves = [(-2, -1), (-2, 1), (2, -1), (2, 1),
                 (-1, -2), (-1, 2), (1, -2), (1, 2)]
     def get_moves(self):
@@ -373,6 +507,9 @@ class Knight(Piece):
         return 'k'
 
 class Vizir(Piece):
+    """
+    Класс шахматной фигуры — Визирь.
+    """
     moves = [(-1, 0), (1, 0), (0, -1), (0, 1), (-2, 0), (2, 0), (0, -2), (0, 2)]
     def get_moves(self):
         return [(-1, 0), (1, 0), (0, -1), (0, 1), (-2, 0), (2, 0), (0, -2), (0, 2)]
@@ -382,11 +519,21 @@ class Vizir(Piece):
         return 'v'
 
 class BoardCell:
+    """
+    Класс, представляющий одну ячейку шахматной доски.
+
+    Атрибуты:
+        :param x (int): Координата X (столбец).
+        :param y (int): Координата Y (строка).
+        :param piece (Optional[Piece]): Фигура, размещённая в ячейке, если есть.
+        :param threatened (bool): Флаг, указывающий, находится ли ячейка под угрозой.
+    """
     def __init__(self, x: int, y: int):
         self.x = x
         self.y = y
         self.piece: Optional[Piece] = None
         self.threatened = False
+        
     
     def place_piece(self, piece: Piece):
         self.piece = piece
@@ -401,13 +548,25 @@ class BoardCell:
         return self.piece.symbol if self.piece else '*' if self.threatened else '0'
 
 class ChessBoard:
+    """
+    Класс, представляющий шахматную доску и методы размещения фигур.
+    """
     def __init__(self, size: int):
+        """
+        Инициализация пустой доски.
+
+        :param size: Размер доски.
+        """
         self.size = size
         self.grid = [[BoardCell(x, y) for x in range(size)] for y in range(size)]
         self.pieces: List[Piece] = []
     
     def add_piece(self, piece: Piece) -> bool:
-        """Добавляет фигуру на доску с проверкой безопасности"""
+        """
+        Размещает фигуру на доске и обновляет угрозы.
+
+        :param piece: Экземпляр фигуры.
+        """
         cell = self.grid[piece.y][piece.x]
         
         if not cell.is_empty() or not self.is_position_safe(piece):
@@ -419,7 +578,11 @@ class ChessBoard:
         return True
     
     def remove_piece(self, piece: Piece):
-        """Удаляет фигуру с доски"""
+        """
+        Удаляет фигуру с доски и пересчитывает угрозы.
+
+        :param piece: Экземпляр фигуры, которую нужно убрать.
+        """
         cell = self.grid[piece.y][piece.x]
         if cell.piece == piece:
             cell.remove_piece()
@@ -427,7 +590,11 @@ class ChessBoard:
             self.update_threats()
     
     def is_position_safe(self, piece: Piece) -> bool:
-        """Проверяет безопасность позиции для фигуры"""
+        """
+        Проверяет безопасность позиции для фигуры.
+
+        :param piece: Экземпляр фигуры.
+        """
         # Проверка выхода за границы
         if not (0 <= piece.x < self.size and 0 <= piece.y < self.size):
             return False
@@ -476,12 +643,29 @@ class ChessBoard:
         print()
 
 class Solver:
+    """
+    Класс, реализующий решение задачи размещения фигур на шахматной доске
+    с использованием метода полного перебора (backtracking).
+    """
     def __init__(self):
+        """
+        Инициализация хранилища решений.
+        """
         self.solutions: Set[frozenset] = set()
 
-    def solve(self, board: ChessBoard, combinations: List[str]):
-        """Находит все решения с помощью backtracking"""
+    def solve(self, board: ChessBoard, combinations: List[List[str]]) -> None:
+        """
+        Находит все допустимые расстановки фигур, не угрожающих друг другу.
+
+        :param board: Объект шахматной доски с уже размещёнными фигурами.
+        :param combinations: Список всех перестановок фигур для размещения, например ['k', 'v', 'v'].
+        """
         def backtrack(remaining_pieces: List[str]):
+            """
+            Рекурсивный алгоритм поиска с возвратом.
+
+            :param remaining_pieces: Список оставшихся фигур для размещения.
+            """
             if not remaining_pieces:
                 self.solutions.add(frozenset(board.get_solution()))
                 return
@@ -496,49 +680,44 @@ class Solver:
         
         for combination in combinations:
             backtrack(combination)
-    
-    # @staticmethod
-    # def read_input(file_path: str) -> Tuple[int, int, int, int, ChessBoard, List[str]]:
-    #     """Чтение входных данных"""
-    #     with open(file_path, 'r') as file:
-    #         lines = file.readlines()
-    #     n, l, k, v = map(int, lines[0].strip().split())
-    #     board = ChessBoard(n)
-    #     existing_piece = [list(map(int, line.strip().split())) for line in lines[1:] if line.strip().split()]
-    #     # Чтение существующих фигур
-    #     for i in range(k + v):
-    #         x, y = existing_piece[i]
-    #         piece = Knight(x, y) if i < k else Vizir(x, y)
-    #         board.add_piece(piece)
-        
-    #     # Генерация комбинаций фигур для размещения
-    #     combinations = set(combinations_with_replacement('kv', l))
-        
-    #     return n, l, k, v, board, combinations
 
     @staticmethod
     def generateBoard(n, l, k, pieces) -> Tuple[int, int, int, int, ChessBoard, List[str]]:
-        """Чтение входных данных"""
-        # with open(file_path, 'r') as file:
-        #     lines = file.readlines()
-        # n, l, k, v = map(int, lines[0].strip().split())
+        """
+        Генерирует шахматную доску и комбинации фигур для размещения.
+
+        :param n: Размер доски (n x n).
+        :param l: Количество новых фигур, которые нужно разместить.
+        :param k: Количество уже размещённых фигур.
+        :param pieces: Список уже размещённых фигур в формате (тип, (x, y)),
+                       где тип — 'Horse' или 'Vizir'.
+        :return: Кортеж, содержащий:
+            - объект доски (ChessBoard) с размещёнными фигурами,
+            - множество всех возможных комбинаций из L фигур ('k' и 'v') для размещения.
+        """
+
         board = ChessBoard(n)
-        # existing_piece = [list(map(int, line.strip().split())) for line in lines[1:] if line.strip().split()]
-        # Чтение существующих фигур
+
         if k > 0:
             for i in range(k):
                 type, coords = pieces[i]
-                piece = Knight(*coords) if type == "Horse" else Vizir(*coords)
+                piece = Knight(*coords, initiated = True) if type == "Horse" else Vizir(*coords, initiated = True)
                 board.add_piece(piece)
 
         # Генерация комбинаций фигур для размещения
         combinations = set(combinations_with_replacement('kv', l))
-        # print(board.visualize(), combinations)
+
         return board, combinations
     
     @staticmethod
     def write_output(file_path: str, solutions: Set[frozenset]):
-        """Запись результатов в файл"""
+        """
+        Записывает все найденные решения в выходной файл.
+
+        :param file_path: Путь к выходному файлу.
+        :param solutions: Множество решений, каждое из которых представлено как frozenset
+                          кортежей вида (x, y, тип).
+        """
         with open(file_path, 'w') as file:
             if solutions:
                 for solution in solutions:
@@ -548,19 +727,35 @@ class Solver:
                 file.write("no solutions\n")
 
 class SolverThread(QThread):
+    """
+    Поток для выполнения поиска решений в фоновом режиме, не блокируя GUI.
+    По завершении испускает сигнал с результатами.
+    """
+
     finished = Signal(object,object)
-    
-    def __init__(self, solver, board, combinations):
+    # Сигнал, испускаемый по завершении работы потока.
+    # Передаёт: доску и найденные решения.
+
+    def __init__(self, solver: Solver, board: ChessBoard, combinations:List[List[str]]) -> None:
+        """
+        Инициализация потока с нужными параметрами.
+
+        :param solver: Объект класса Solver, реализующий логику поиска решений.
+        :param board: Объект шахматной доски (ChessBoard).
+        :param combinations: Список комбинаций фигур для размещения (например: [['k', 'v'], ['v', 'v']] и т.д.).
+        """
         super().__init__()
         self.solver = solver
         self.board = board
         self.combinations = combinations
     
-    def run(self):
+    def run(self) -> None:
+        """
+        Запускает алгоритм поиска решений в отдельном потоке.
+        По завершении испускает сигнал с доской и найденными решениями.
+        """
         self.solver.solve(self.board, self.combinations)
         self.finished.emit(self.board, self.solver.solutions)
-
-
 
 
 
