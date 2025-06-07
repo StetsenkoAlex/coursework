@@ -1,7 +1,6 @@
 from itertools import combinations_with_replacement
 from typing import List, Tuple, Optional, Set
 from abc import ABC, abstractmethod
-# from grafics import *
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -15,20 +14,16 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QMessageBox,
     QWidget,
-    QTableWidget,
-    QTableWidgetItem,
     QGraphicsRectItem,
     QGraphicsScene, 
     QGraphicsView, 
     QGraphicsRectItem, 
-    QGraphicsSimpleTextItem
+
 
 )
-from PySide6.QtCore import Qt, QFile, QThread, Signal
-from PySide6.QtGui import QBrush, QPen, QColor, QFont, QPainter
+from PySide6.QtCore import QFile, QThread, Signal, QRegularExpression
+from PySide6.QtGui import QPen, QColor, QPainter
 from PySide6.QtUiTools import QUiLoader
-# import sys
-from re import fullmatch
 
 class InputCoordinatesDialog(QDialog):
     """
@@ -59,7 +54,8 @@ class InputCoordinatesDialog(QDialog):
 
         :return: True, если формат корректный
         """
-        return bool(fullmatch(r"\d+\s\d+", s.strip()))
+        regex = QRegularExpression(r"^\d+\s\d+$")
+        return regex.match(s.strip()).hasMatch()
     def load_ui(self):
         """
         Загружает интерфейс из .ui-файла и подключает кнопки.
